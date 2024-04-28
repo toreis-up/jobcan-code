@@ -11,7 +11,7 @@ This is the README for your extension "jobcan-code".
 - [x] Login (Classic)
 - [ ] Login (2FA)
 - [x] Touch
-  - [ ] Indicate current working status
+  - [x] Indicate current working status
   - [ ] Switch automatically as yakin mode
 - [ ] Check working time
 
