@@ -21,6 +21,11 @@ const getPageTitle = async (htmlString: string) => {
   return html.querySelectorAll("title")[0]?.text || "";
 };
 
+const getNameValue = async (htmlString: string, inputName: string) => {
+  const html = await parse(htmlString);
+  return html.querySelector(`input[name='${inputName}']`)?.attributes["value"] || "";
+};
+
 export function activate(context: vscode.ExtensionContext) {
   const secretStorage: SecretStorage = context.secrets;
 
@@ -37,6 +42,18 @@ export function activate(context: vscode.ExtensionContext) {
         const htmlString = await res.text();
         let csrfToken = await getMetaValue(htmlString, "csrf-token");
         await secretStorage.store("jobcan-csrf-token", csrfToken);
+      })
+      .catch(async (e: Error) => {
+        await vscode.window.showErrorMessage(e.message);
+      });
+  };
+
+  const fetchADIT = async () => {
+    await fetch("https://ssl.jobcan.jp/employee", { dispatcher: agent })
+      .then(async (res) => {
+        const htmlString = await res.text();
+        let aditToken = await getNameValue(htmlString, "token");
+        await secretStorage.store("jobcan-adit-token", aditToken);
       })
       .catch(async (e: Error) => {
         await vscode.window.showErrorMessage(e.message);
@@ -76,7 +93,8 @@ export function activate(context: vscode.ExtensionContext) {
 			})
 			.then(async (isLoggedIn) => {
 				if (isLoggedIn) {
-					await vscode.window.showInformationMessage("Logged In!");
+          await vscode.window.showInformationMessage("Logged In!");
+          await fetchADIT();
 					return;
 				}
         await vscode.window.showInformationMessage("Login Failed. Check your username or password.");
