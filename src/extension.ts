@@ -34,7 +34,7 @@ const getCurrentStatus = async () => {
     defaultAditGroupId: number,
     current_status: JobcanStatus
   };
-  
+
   await fetch("https://ssl.jobcan.jp/employee", {
     method: "GET",
     dispatcher: agent,
@@ -69,13 +69,17 @@ export function activate(context: vscode.ExtensionContext) {
   let jobcanTouch = vscode.commands.registerCommand(
     "jobcan-code.jobcan-touch",
     async () => {
-      await _jobcanLogin();
+      if (!(await _jobcanLogin())) {
+        vscode.window.showErrorMessage("Login Failed...");
+      }
+
       const formData = new FormData();
       formData.append("is_yakin", enableYakin ? 1 : 0);
       formData.append("adit_item", "DEF");
       formData.append("notice", "");
       formData.append("token", await secretStorage.get("jobcan-adit-token"));
-      formData.append("adit_group_id", (await getCurrentStatus()).defaultAditGroupId); // TODO: fetch default adit_group_id ref: https://github.com/Kyure-A/jobcan.el/blob/9901b0c2ab8dfbaca01aabcd1c9f6c1e70294816/jobcan.el#L272
+      formData.append("adit_group_id", (await getCurrentStatus()).defaultAditGroupId);
+
       await fetch("https://ssl.jobcan.jp/employee/index/adit", {
         method: "POST",
         body: formData,
@@ -84,7 +88,7 @@ export function activate(context: vscode.ExtensionContext) {
       .then(async (res) => {
         const jobcanResponse = await res.json() as JobcanAditResponse;
         if (jobcanResponse.result !== 1) {
-          throw new Error("It seems wrong. Please chech jobcan.");
+          throw new Error("It seems wrong. Please check jobcan.");
         }
         vscode.window.showInformationMessage(`Your current status is ${jobcanResponse.current_status}`);
       })
@@ -118,16 +122,25 @@ export function activate(context: vscode.ExtensionContext) {
       });
   };
 
-  const _jobcanLogin = async () => {
+  const isSetCredentials = async () => {
     const username = await secretStorage.get("jobcan-username");
     const password = await secretStorage.get("jobcan-password");
     if (!username || !password) {
-      vscode.window.showErrorMessage(
-        "ユーザー名もしくはパスワードが設定されていません。"
-      );
-      return;
+
+      return false;
     }
+    return true;
+  };
+
+  const _jobcanLogin = async () => {
     await fetchCSRF().then(async () => {
+      if (!await isSetCredentials()) {
+        vscode.window.showErrorMessage(
+          "ユーザー名もしくはパスワードが設定されていません。"
+        );
+        return false;
+      }
+
       const formData = new FormData();
       formData.append(
         "authenticity_token",
@@ -164,15 +177,16 @@ export function activate(context: vscode.ExtensionContext) {
         })
         .catch(async (e: Error) => {
           await vscode.window.showErrorMessage(e.message);
+          return false;
         });
     });
+    return true;
   };
 
   let jobcanLogin = vscode.commands.registerCommand(
     "jobcan-code.jobcan-login",
     async () => {
-      await _jobcanLogin();
-      await vscode.window.showInformationMessage("Logged In!");
+      await _jobcanLogin().then(async () => await vscode.window.showInformationMessage("Logged In!"));
     }
   );
 
