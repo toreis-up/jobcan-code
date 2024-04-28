@@ -10,6 +10,7 @@ const jar = new CookieJar();
 const agent = new CookieAgent({ cookies: { jar } });
 
 let enableYakin = false;
+let jobcanStatusBarItem: vscode.StatusBarItem;
 
 const getMetaValue = async (htmlString: string, tagName: string) => {
   const html = await parse(htmlString);
@@ -63,8 +64,11 @@ type JobcanAditResponse = {
   current_status: JobcanStatus
 };
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   const secretStorage: SecretStorage = context.secrets;
+  jobcanStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  jobcanStatusBarItem.command = "jobcan-code.jobcan-touch";
+  context.subscriptions.push(jobcanStatusBarItem);
 
   let jobcanTouch = vscode.commands.registerCommand(
     "jobcan-code.jobcan-touch",
@@ -91,6 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
           throw new Error("It seems wrong. Please check jobcan.");
         }
         vscode.window.showInformationMessage(`Your current status is ${jobcanResponse.current_status}`);
+        await refreshStatusBar();
       })
       .catch(async (err) => {
           vscode.window.showErrorMessage(err);
@@ -183,10 +188,27 @@ export function activate(context: vscode.ExtensionContext) {
     return true;
   };
 
+  const refreshStatusBar = async () => {
+    let statusText = "Unknown";
+    if (!await _jobcanLogin()) {
+      statusText = "Needs Login";
+      jobcanStatusBarItem.command = "jobcan-code.jobcan-login";
+    } else {
+      jobcanStatusBarItem.command = "jobcan-code.jobcan-touch";
+      const status = await getCurrentStatus();
+      statusText = status.current_status[0].toUpperCase() + status.current_status.slice(1);
+    }
+    jobcanStatusBarItem.text = statusText;
+    jobcanStatusBarItem.show();
+  };
+
   let jobcanLogin = vscode.commands.registerCommand(
     "jobcan-code.jobcan-login",
     async () => {
-      await _jobcanLogin().then(async () => await vscode.window.showInformationMessage("Logged In!"));
+      await _jobcanLogin().then(async () => {
+        await vscode.window.showInformationMessage("Logged In!");
+        await refreshStatusBar();
+      });
     }
   );
 
@@ -220,6 +242,8 @@ export function activate(context: vscode.ExtensionContext) {
     setPassword,
     setUsername,
   );
+
+  await refreshStatusBar()
 }
 
 // This method is called when your extension is deactivated
